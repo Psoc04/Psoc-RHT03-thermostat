@@ -1,0 +1,172 @@
+/* ========================================
+ *
+ * Copyright YOUR COMPANY, THE YEAR
+ * All Rights Reserved
+ * UNPUBLISHED, LICENSED SOFTWARE.
+ *
+ * CONFIDENTIAL AND PROPRIETARY INFORMATION
+ * WHICH IS THE PROPERTY OF your company.
+ *
+ * ========================================
+*/
+#include <project.h>
+#include <BitCheck.h>
+
+int8 URh, LRh,UTmp, LTmp, Cs;
+
+int16 Rh8, TmpC8, TmpF8, Rh16, TmpC16, TmpF16, CCS;
+
+int int2CharPrint(int integer){
+    int in[3],i;
+    
+    in[0]=(integer/100)+48;
+    in[1]=((integer/10)-((integer/100)*10))+48;
+    in[2]=(integer-((integer/10)*10))+48;
+    
+    for(i=0;i<3;i++){
+        Display_PutChar(in[i]);
+    }
+    return 0;
+}
+
+int int2PDecPrint(int integer){
+    int i[6]={0,0,0,0,0,0},in=0;
+    
+    if(integer > -999 && integer < -99){
+        i[2]=(((integer-(integer*2))/100)+48);
+        i[3]=(((integer-(integer*2))/10)-(((integer-(integer*2))/100)*10)+48);
+        i[4]=46;
+        i[5]=((integer-(integer*2))-(((integer-(integer*2))/10)*10)+48);
+        i[0]=0;
+        i[1]=45;
+    }
+    
+    if(integer > -99 && integer < -9){
+        i[2]=(((integer-(integer*2))/100)+48);
+        i[3]=(((integer-(integer*2))/10)-(((integer-(integer*2))/100)*10)+48);
+        i[4]=46;
+        i[5]=((integer-(integer*2))-(((integer-(integer*2))/10)*10)+48);
+        i[0]=0;
+        i[1]=45;
+    }
+    
+    if(integer > -9 && integer < 0){
+        i[3]=(((integer-(integer*2))/10)+48);
+        i[4]=46;
+        i[5]=((integer-(integer*2))-(((integer-(integer*2))/10)*10)+48);
+        i[0]=0;
+        i[1]=0;
+        i[2]=45;
+    }
+    
+    if(integer > 999){
+        i[1]=(integer/1000)+48;
+        i[2]=((integer/100)-((integer/1000)*10)+48);
+        i[3]=((integer/10)-((integer/100)*10)+48);
+        i[4]=46;
+        i[5]=(integer-((integer/10)*10)+48);
+        i[0]=0;
+    }
+    
+    if(integer > 99 && integer <999){
+        i[2]=((integer/100)+48);
+        i[3]=((integer/10)-((integer/100)*10)+48);
+        i[4]=46;
+        i[5]=(integer-((integer/10)*10)+48);
+        i[0]=0;
+        i[1]=0;
+    }
+    
+    if(integer > 0 && integer < 99){
+        i[3]=((integer/10)+48);
+        i[4]=46;
+        i[5]=(integer-((integer/10)*10)+48);
+        i[0]=0;
+        i[1]=0;
+        i[2]=0;
+    }
+    
+    for(in=0;in<6;++in){
+        Display_PutChar(i[in]);
+    }
+    return 0;
+}
+
+int main()
+{
+    /* Place your initialization/startup code here (e.g. MyInst_Start()) */
+    
+    Clock_1_Enable();       //Enable Comm_poll clock set for 10KHz
+    Comm_Poll_Start();      //Start PWM Comm_Poll to hold high for 2sec and low for 1ms
+    
+    Display_Start();        //Start UART with only TX (since thats all I care about ATM)
+    
+    BitClock_Enable();      //Enable Block at 1MHz to be used with LowBitTimer/DataBits/CommStart 
+                            //to filter sort the different pulse lengths
+    LowBitTimer_Start();    //Detects pulses under 30ms
+    DataBits_Start();       //Detects all pulses
+    CommStart_Start();      //Detects on a very brief pulse at start of RHT03 signal
+    
+    
+    UpperRh_Start();        //Start Relative humiditys upeer 8-bit shift register
+    LowerRh_Start();        //RH lower 8-bit shift register
+    UpperTmp_Start();       //Start Tempurature upper 8-bit shift register
+    LowerTmp_Start();       //TMP lower 8-bit shift register
+    CheckSum_Start();       //Start Checksum 8-bit shift register
+    RH_Start();             //Start Relative humiditys 16-bit shift register
+    TMP_Start();            //Start Temperature 16-bit shift register
+    
+    //CyGlobalIntEnable;  /* Uncomment this line to enable global interrupts. */
+            
+    for(;;)
+    {
+        URh=UpperRh_ReadRegValue();         //read RH upper 8-bit
+        LRh=LowerRh_ReadRegValue();         //read RH lower 8-bit
+        UTmp=UpperTmp_ReadRegValue();       //read TMP upper 8-bit
+        LTmp=LowerTmp_ReadRegValue();       //read TMP lower 8-bit
+        Cs=CheckSum_ReadRegValue();         //read checksum 8-bit
+        Rh16=RH_ReadRegValue();               //read RH 16-bit 
+        TmpC16=TMP_ReadRegValue();          //read TMP 16-bit
+        
+        TmpF16=((TmpC16/10)*9/5+32)*10;     //same conversion equation just for 16bit
+        CCS=(URh+LRh+UTmp+LTmp);            //Checksum validation each 8-bit value added together
+        
+        if (Cs == CCS){
+            int2CharPrint(URh);    
+            Display_PutString(",");                            //delimiters
+            int2CharPrint(LRh);
+            Display_PutString(",");
+            int2CharPrint(UTmp);
+            Display_PutString(",");
+            int2CharPrint(LTmp);        
+            Display_PutString(",");
+            int2CharPrint(Cs);
+            Display_PutCRLF(0);
+        
+            Display_PutString("                ");            //makes the calculated checksum appear below captued
+            int2CharPrint(CCS);
+            Display_PutCRLF(0);
+        
+            Display_PutString("16Rh ");                          // displays correct RH value
+            int2PDecPrint(Rh16);
+            Display_PutString("%");
+            Display_PutCRLF(0);
+        
+            Display_PutString("16Tmp ");
+            int2PDecPrint(TmpC16);
+            Display_PutString("C/");
+            int2PDecPrint(TmpF16);
+            Display_PutString("F");
+            Display_PutCRLF(0);
+        }
+        
+        if (Cs != CCS){
+            Display_PutString("WARNING!!!! Checksum ERROR!!!! WARNING!!!");
+            Display_PutCRLF(0);
+        }
+        
+        CyDelay(2000);                                      //software pause for 2 seconds 
+    }
+}
+
+/* [] END OF FILE */
